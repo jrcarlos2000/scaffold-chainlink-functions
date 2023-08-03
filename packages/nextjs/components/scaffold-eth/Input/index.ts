@@ -5,3 +5,4 @@ export * from "./EtherInput";
 export * from "./InputBase";
 export * from "./IntegerInput";
 export * from "./utils";
+export * from "./CodeMirrorInput";

@@ -14,12 +14,16 @@
     "vercel:yolo": "vercel --build-env NEXT_PUBLIC_IGNORE_BUILD_ERROR=true"
   },
   "dependencies": {
+    "@codemirror/lang-javascript": "^6.1.9",
     "@ethersproject/providers": "~5.7.2",
     "@heroicons/react": "~2.0.11",
     "@rainbow-me/rainbowkit": "~1.0.4",
+    "@uiw/react-codemirror": "^4.21.9",
     "@uniswap/sdk-core": "~4.0.1",
     "@uniswap/v2-sdk": "~3.0.1",
+    "axios": "^1.4.0",
     "daisyui": "~2.31.0",
+    "is-http-url": "^2.0.0",
     "next": "~13.1.6",
     "nextjs-progressbar": "~0.0.16",
     "qrcode.react": "~3.1.0",

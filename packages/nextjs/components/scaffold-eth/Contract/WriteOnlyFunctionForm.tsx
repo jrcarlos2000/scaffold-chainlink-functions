@@ -3,6 +3,7 @@ import { Abi, AbiFunction } from "abitype";
 import { Address, TransactionReceipt } from "viem";
 import { useContractWrite, useNetwork, useWaitForTransaction } from "wagmi";
 import {
+  CodeMirrorInput,
   ContractInput,
   IntegerInput,
   TxReceipt,
@@ -13,6 +14,8 @@ import {
 } from "~~/components/scaffold-eth";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { getTargetNetwork, notification } from "~~/utils/scaffold-eth";
+
+const Functions_1 = require("./FunctionsSandboxLibrary/Functions");
 
 type WriteOnlyFunctionFormProps = {
   abiFunction: AbiFunction;
@@ -40,6 +43,13 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
   });
 
   const handleWrite = async () => {
+    //execute code string
+    if (abiFunction.name == "executeRequest") {
+      const inputArgs = getParsedContractFunctionArgs(form);
+      setRequestArgs(inputArgs[2]);
+      chainlinkFunction();
+      return;
+    }
     if (writeAsync) {
       try {
         const makeWriteWithParams = () => writeAsync({ value: BigInt(txValue) });
@@ -52,6 +62,72 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
     }
   };
 
+  //decode Array Buffer
+  const getDecodedResultLog = (config: any, successResult: any) => {
+    if (config.expectedReturnType && config.expectedReturnType !== "Buffer") {
+      let decodedOutput;
+      switch (config.expectedReturnType) {
+        case "uint256":
+          // decode method not quite accurate
+          decodedOutput = new Uint8Array(successResult)[31];
+          break;
+        // case "int256":
+        //   decodedOutput = signedInt256toBigInt("0x" + successResult.slice(2).slice(-64));
+        //   break;
+        case "string":
+          decodedOutput = Buffer.from(successResult, "hex").toString();
+          break;
+        default:
+          const end = config.expectedReturnType;
+          throw new Error(`unused expectedReturnType ${end}`);
+      }
+      const decodedOutputLog = `Decoded as a ${config.expectedReturnType}: ${decodedOutput}`;
+      return decodedOutputLog;
+    }
+  };
+
+  //Functions module
+  const functionsModule = new Functions_1.FunctionsModule();
+  const Functions = functionsModule.buildFunctionsmodule();
+
+  //return type
+  const ReturnType = {
+    uint: "uint256",
+    uint256: "uint256",
+    int: "int256",
+    int256: "int256",
+    string: "string",
+    bytes: "Buffer",
+    Buffer: "Buffer",
+  };
+  const [requestArgs, setRequestArgs] = useState([]);
+  const [codeString, setCodeString] = useState("");
+  //function request config
+  const requestConfig = {
+    expectedReturnType: ReturnType.uint256,
+    args: requestArgs,
+  };
+
+  //function global module
+  const allGlobals = {
+    Functions,
+    args: !requestArgs ? [] : [...requestArgs],
+  };
+  //execute chanlink function
+  const chainlinkFunction = () => {
+    const globalsValues = Object.values(allGlobals);
+    const allGlobalKeys = Object.keys(allGlobals).join(", ");
+    if (codeString) {
+      const newCode = `(function execCode(${allGlobalKeys}){
+    ${codeString}\n
+  })`;
+      const result = eval(newCode).apply(this, globalsValues);
+      const decodeResult = getDecodedResultLog(requestConfig, result);
+      console.log("bufferResult", result);
+
+      console.log("decodeResult", decodeResult);
+    }
+  };
   const [displayedTxResult, setDisplayedTxResult] = useState<TransactionReceipt>();
   const { data: txResult } = useWaitForTransaction({
     hash: result?.hash,
@@ -82,6 +158,14 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
     <div className="py-5 space-y-3 first:pt-0 last:pb-1">
       <div className={`flex gap-3 ${zeroInputs ? "flex-row justify-between items-center" : "flex-col"}`}>
         <p className="font-medium my-0 break-words">{abiFunction.name}</p>
+        {abiFunction.name == "executeRequest" ? (
+          <div className="bg-[#282c34] rounded-md">
+            <div className="text-xs  text-white p-2">Javscript Code</div>
+            <CodeMirrorInput codeString={codeString} onChange={e => setCodeString(e)}></CodeMirrorInput>
+          </div>
+        ) : (
+          ""
+        )}
         {inputs}
         {abiFunction.stateMutability === "payable" ? (
           <IntegerInput
