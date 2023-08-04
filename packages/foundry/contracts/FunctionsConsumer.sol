@@ -66,6 +66,19 @@ contract FunctionsConsumer is FunctionsClient, ConfirmedOwner {
     }
 
     /**
+     * @dev USE ONLY IN LOCALHOST
+     */
+
+    function mockHandleFulfillRequest(
+        bytes32,
+        bytes memory response,
+        bytes memory err
+    ) external {
+        require(msg.sender == address(s_oracle), "Only oracle can call");
+        fulfillRequest(latestRequestId, response, err);
+    }
+
+    /**
      * @notice Callback that is invoked once the DON has resolved the request or hit an error
      *
      * @param requestId The request ID, returned by sendRequest()

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Abi, AbiFunction } from "abitype";
-import { Address, TransactionReceipt } from "viem";
-import { useContractWrite, useNetwork, useWaitForTransaction } from "wagmi";
+import { Address, TransactionReceipt, toHex } from "viem";
+import { keccak256 } from "viem";
+import { useContractWrite, useNetwork, usePrepareContractWrite, useWaitForTransaction } from "wagmi";
 import {
   CodeMirrorInput,
   ContractInput,
@@ -12,6 +13,7 @@ import {
   getParsedContractFunctionArgs,
   getParsedError,
 } from "~~/components/scaffold-eth";
+import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { getTargetNetwork, notification } from "~~/utils/scaffold-eth";
 
@@ -27,9 +29,26 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
   const [form, setForm] = useState<Record<string, any>>(() => getInitialFormState(abiFunction));
   const [txValue, setTxValue] = useState<string | bigint>("");
   const { chain } = useNetwork();
-  const writeTxn = useTransactor();
   const writeDisabled = !chain || chain?.id !== getTargetNetwork().id;
+  const { data: mockOracleContractInfo } = useDeployedContractInfo("MockChainlinkOracle");
+  const [isExecuteMock, setIsExecuteMock] = useState(false);
+  const [requestArgs, setRequestArgs] = useState([]);
+  const [codeString, setCodeString] = useState("");
+  const writeTxn = useTransactor();
+  const [fullfilRequestArgs, setFullfilRequestArgs] = useState(Array<string>);
 
+  const { config: mockFullfilRequestConfig } = usePrepareContractWrite({
+    address: mockOracleContractInfo?.address,
+    abi: mockOracleContractInfo?.abi,
+    functionName: "mockHandleFulfillRequest",
+    args: [...fullfilRequestArgs] as unknown as readonly [`0x${string}`, `0x${string}`, `0x${string}`],
+  });
+
+  const {
+    data: resultFulfillWrite,
+    isLoading: isLoadingFulfillWrite,
+    writeAsync: executeMockFulfillWrite,
+  } = useContractWrite(mockFullfilRequestConfig);
   const {
     data: result,
     isLoading,
@@ -41,72 +60,61 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
     abi: [abiFunction] as Abi,
     args: getParsedContractFunctionArgs(form),
   });
-
-  const handleWrite = async () => {
-    //execute code string
-    if (abiFunction.name == "executeRequest") {
-      const inputArgs = getParsedContractFunctionArgs(form);
-      setRequestArgs(inputArgs[2]);
-      chainlinkFunction();
-      return;
-    }
-    if (writeAsync) {
-      try {
-        const makeWriteWithParams = () => writeAsync({ value: BigInt(txValue) });
-        await writeTxn(makeWriteWithParams);
-        onChange();
-      } catch (e: any) {
-        const message = getParsedError(e);
-        notification.error(message);
-      }
+  const handleFulfillRequest = async () => {
+    if (executeMockFulfillWrite) {
+      console.log("config", mockFullfilRequestConfig);
+      const makeWriteWithParams = () => executeMockFulfillWrite();
+      await writeTxn(makeWriteWithParams);
+      onChange();
     }
   };
 
-  //decode Array Buffer
-  const getDecodedResultLog = (config: any, successResult: any) => {
-    if (config.expectedReturnType && config.expectedReturnType !== "Buffer") {
-      let decodedOutput;
-      switch (config.expectedReturnType) {
-        case "uint256":
-          // decode method not quite accurate
-          decodedOutput = new Uint8Array(successResult)[31];
-          break;
-        // case "int256":
-        //   decodedOutput = signedInt256toBigInt("0x" + successResult.slice(2).slice(-64));
-        //   break;
-        case "string":
-          decodedOutput = Buffer.from(successResult, "hex").toString();
-          break;
-        default:
-          const end = config.expectedReturnType;
-          throw new Error(`unused expectedReturnType ${end}`);
+  useEffect(() => {
+    if (isExecuteMock) {
+      handleFulfillRequest();
+      setIsExecuteMock(false);
+    }
+  }, [isExecuteMock]);
+
+  const handleWrite = async () => {
+    if (abiFunction.name == "executeRequest") {
+      const inputArgs = getParsedContractFunctionArgs(form);
+      setRequestArgs(inputArgs[2]);
+      const result = chainlinkFunction();
+      try {
+        if (chain?.id == 31337) {
+          const requestArgs = [...getParsedContractFunctionArgs(form)];
+          requestArgs[0] = codeString;
+          requestArgs[2] = requestArgs[2] || [];
+          requestArgs[3] = 1;
+          requestArgs[4] = 300000;
+
+          console.log(result);
+          const args = [keccak256("0xSample"), toHex(result), ""];
+          setFullfilRequestArgs(args);
+          setIsExecuteMock(true);
+        } else {
+        }
+      } catch (e) {
+        console.log("error", e);
       }
-      const decodedOutputLog = `Decoded as a ${config.expectedReturnType}: ${decodedOutput}`;
-      return decodedOutputLog;
+    } else {
+      if (writeAsync) {
+        try {
+          const makeWriteWithParams = () => writeAsync({ value: BigInt(txValue) });
+          await writeTxn(makeWriteWithParams);
+          onChange();
+        } catch (e: any) {
+          const message = getParsedError(e);
+          notification.error(message);
+        }
+      }
     }
   };
 
   //Functions module
   const functionsModule = new Functions_1.FunctionsModule();
   const Functions = functionsModule.buildFunctionsmodule();
-
-  //return type
-  const ReturnType = {
-    uint: "uint256",
-    uint256: "uint256",
-    int: "int256",
-    int256: "int256",
-    string: "string",
-    bytes: "Buffer",
-    Buffer: "Buffer",
-  };
-  const [requestArgs, setRequestArgs] = useState([]);
-  const [codeString, setCodeString] = useState("");
-  //function request config
-  const requestConfig = {
-    expectedReturnType: ReturnType.uint256,
-    args: requestArgs,
-  };
 
   //function global module
   const allGlobals = {
@@ -122,19 +130,25 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
     ${codeString}\n
   })`;
       const result = eval(newCode).apply(this, globalsValues);
-      const decodeResult = getDecodedResultLog(requestConfig, result);
-      console.log("bufferResult", result);
-
-      console.log("decodeResult", decodeResult);
+      return result;
     }
   };
   const [displayedTxResult, setDisplayedTxResult] = useState<TransactionReceipt>();
   const { data: txResult } = useWaitForTransaction({
     hash: result?.hash,
   });
+
+  const { data: txResultFulfillWrite } = useWaitForTransaction({
+    hash: resultFulfillWrite?.hash,
+  });
+
   useEffect(() => {
     setDisplayedTxResult(txResult);
   }, [txResult]);
+
+  useEffect(() => {
+    setDisplayedTxResult(txResultFulfillWrite);
+  }, [txResultFulfillWrite]);
 
   // TODO use `useMemo` to optimize also update in ReadOnlyFunctionForm
   const inputs = abiFunction.inputs.map((input, inputIndex) => {
@@ -191,7 +205,7 @@ export const WriteOnlyFunctionForm = ({ abiFunction, onChange, contractAddress }
             data-tip={`${writeDisabled && "Wallet not connected or in the wrong network"}`}
           >
             <button
-              className={`btn btn-secondary btn-sm ${isLoading ? "loading" : ""}`}
+              className={`btn btn-secondary btn-sm ${isLoading || isLoadingFulfillWrite ? "loading" : ""}`}
               disabled={writeDisabled}
               onClick={handleWrite}
             >

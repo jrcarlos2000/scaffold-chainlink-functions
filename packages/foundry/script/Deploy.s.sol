@@ -2,16 +2,35 @@
 pragma solidity ^0.8.19;
 
 import "../contracts/FunctionsConsumer.sol";
+import "../contracts/MockChainlinkOracle.sol";
 import "./DeployHelpers.s.sol";
 
 contract DeployScript is ScaffoldETHDeploy {
+    address public chainlinkOracle; // NOTE : set this address if you want to deploy to live network
+
     function run() external {
         uint256 deployerPrivateKey = setupLocalhostEnv();
-
         vm.startBroadcast(deployerPrivateKey);
+
+        if (isLocalhost()) {
+            bytes memory DONPublicKey = bytes("DON_PUBLIC_KEY");
+
+            MockChainlinkOracle mockChainlinkOracle = new MockChainlinkOracle(
+                DONPublicKey
+            );
+            chainlinkOracle = address(mockChainlinkOracle);
+        }
+
         FunctionsConsumer functionsConsumer = new FunctionsConsumer(
-            vm.addr(deployerPrivateKey)
+            chainlinkOracle
         );
+
+        if (isLocalhost()) {
+            MockChainlinkOracle(chainlinkOracle).setFunctionsConsumer(
+                address(functionsConsumer)
+            );
+        }
+
         console.logString(
             string.concat(
                 "Functions Consumer deployed at: ",

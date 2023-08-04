@@ -4,8 +4,73 @@ const contracts = {
       name: "Anvil",
       chainId: "31337",
       contracts: {
+        MockChainlinkOracle: {
+          address: "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+          abi: [
+            {
+              inputs: [
+                {
+                  internalType: "bytes",
+                  name: "_DONPublicKey",
+                  type: "bytes",
+                },
+              ],
+              stateMutability: "nonpayable",
+              type: "constructor",
+            },
+            {
+              inputs: [],
+              name: "getDONPublicKey",
+              outputs: [
+                {
+                  internalType: "bytes",
+                  name: "",
+                  type: "bytes",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "bytes32",
+                  name: "requestId",
+                  type: "bytes32",
+                },
+                {
+                  internalType: "bytes",
+                  name: "response",
+                  type: "bytes",
+                },
+                {
+                  internalType: "bytes",
+                  name: "err",
+                  type: "bytes",
+                },
+              ],
+              name: "mockHandleFulfillRequest",
+              outputs: [],
+              stateMutability: "nonpayable",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "address",
+                  name: "_functionsConsumer",
+                  type: "address",
+                },
+              ],
+              name: "setFunctionsConsumer",
+              outputs: [],
+              stateMutability: "nonpayable",
+              type: "function",
+            },
+          ],
+        },
         FunctionsConsumer: {
-          address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          address: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
           abi: [
             {
               inputs: [
@@ -345,6 +410,29 @@ const contracts = {
                 },
               ],
               stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "bytes32",
+                  name: "",
+                  type: "bytes32",
+                },
+                {
+                  internalType: "bytes",
+                  name: "response",
+                  type: "bytes",
+                },
+                {
+                  internalType: "bytes",
+                  name: "err",
+                  type: "bytes",
+                },
+              ],
+              name: "mockHandleFulfillRequest",
+              outputs: [],
+              stateMutability: "nonpayable",
               type: "function",
             },
             {

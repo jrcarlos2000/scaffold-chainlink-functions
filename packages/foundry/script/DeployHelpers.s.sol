@@ -79,4 +79,8 @@ contract ScaffoldETHDeploy is Script {
         );
         vm.writeJson(jsonWrite, path);
     }
+    
+    function isLocalhost() internal view returns (bool){
+        return block.chainid == 31337;
+    }
 }
